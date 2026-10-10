@@ -17,7 +17,7 @@ Website: <https://yuhuabillchen.github.io/local_voice_buddy/>
 |---|---|
 | computer | a mini PC or laptop with a **Ryzen AI 7040 or 8040** CPU (for example Ryzen 7 7840HS / 8845HS, Ryzen 9 8945HS) |
 | memory | **32 GB** |
-| disk | 50 GB free |
+| disk | 60 GB free |
 | system | Linux with kernel 6.14 or newer (tested on Ubuntu 26.04 LTS) and [Docker](https://docs.docker.com/engine/install/) |
 
 Ryzen AI 300 ("Strix") and machines with less memory are not supported yet.
@@ -30,16 +30,19 @@ cd local_voice_buddy
 ./install.sh
 ```
 
-The installer checks the machine and asks for your password (sudo) for up to two system changes,
+The installer checks the machine and asks for your password (sudo) for up to three system changes,
 each explained before it asks:
 
 1. keep the NPU from power-saving, which can otherwise crash the speech services when memory is tight;
 2. let the GPU use 24 GB of system memory (the model needs more than Linux allows by default). This
-   one needs a reboot; run `./install.sh` again afterwards.
+   one needs a reboot; run `./install.sh` again afterwards;
+3. add 8 GB of swap if there is less than 4 GB, for the moment after a reboot when all three models
+   load at once.
 
-Then it downloads the model (16.5 GB) and the speech models (~5 GB), and starts everything. When it
-says **Ready**, open <http://localhost:3000>, create your account (the first one is the admin), and
-press the headphone button next to the message box to start talking.
+Then it downloads the chat model (16.5 GB), the speech models (~5 GB) and the programs (~10 GB), and
+starts everything. When it says **Ready**, open <http://localhost:3000>, create your account (the
+first one is the admin), and press the round voice button at the right end of the message box to
+start talking.
 
 It starts by itself after every reboot. On the very first start the speech recognizer spends a few
 minutes preparing itself for the NPU. In a conversation, the reply starts speaking about 8 to 10
@@ -47,9 +50,10 @@ seconds after you stop talking (the first message of a new chat takes about 20).
 
 ## Use it from your phone
 
-Open `http://<the PC's address>:3000` on any device at home. Typing works right away. Browsers only
-allow the microphone on secure (https) pages, though, so for talking from another device the
-simplest route is [Tailscale](https://tailscale.com) (free for personal use), which also works away
+Open `http://<the PC's address>:3000` on any device at home. Typing works right away. Accounts
+other people create wait for your approval under Admin Settings > Users, unless you set the default
+role there to "user". Browsers only allow the microphone on secure (https) pages, though, so for
+talking from another device the simplest route is [Tailscale](https://tailscale.com) (free for personal use), which also works away
 from home:
 
 ```sh
@@ -83,7 +87,7 @@ Edit `.env` and run `docker compose up -d`:
 | `CONTEXT` | 32768 | how much of the conversation the model keeps in view, in tokens |
 | `THINKING` | off | `on` lets the model think before answering: better at hard questions, too slow for talking |
 | `SPEECH_SPEED` | 1.1 | speaking speed |
-| `VOICE` | default | voice for new users |
+| `VOICE` | default | voice Open WebUI starts with; read on its first start only, afterwards Admin Settings > Audio |
 | `WEBUI_PORT` | 3000 | |
 
 ## Everyday commands
@@ -92,7 +96,7 @@ Edit `.env` and run `docker compose up -d`:
 docker compose ps              # what is running
 docker compose logs -f voice   # what the voice is doing (also: llm, whisper, webui)
 docker compose stop            # stop everything (start again: docker compose up -d)
-git pull && docker compose pull && docker compose up -d   # update
+git pull && ./install.sh      # update
 ```
 
 Chats and accounts live in the `webui-data` Docker volume; `docker compose down` keeps them,

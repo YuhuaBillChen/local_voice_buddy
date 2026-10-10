@@ -6,7 +6,8 @@ beacons (uvicorn logs the query string). Events: start/chunk/finish (Chat.svelte
 -> overlay), play:start/playing/ended/pause/error/reject (#audioElement),
 interrupt:<vad|tap>, loop:wait/done/exit, rec:stop, stt, submitted.
 
-Safe to rerun; remove with a fresh OWUI image. Set OWUI_CHUNKS to dry-run on a copy.
+Only lengths and timings are logged, never text. Safe to rerun; remove with a fresh OWUI image.
+Set OWUI_CHUNKS to dry-run on a copy.
 """
 from pathlib import Path
 import os
@@ -37,7 +38,7 @@ EDITS = [
     ('le("click",Wt,()=>{r(K)&&De()})', 'le("click",Wt,()=>{r(K)&&De("tap")})', 2),
     # overlay event handlers
     ('Je=async ue=>{const{id:me}=ue.detail;B=!0,', 'Je=async ue=>{const{id:me}=ue.detail;__ll("start:"+String(me).slice(0,8)+":same="+(te===me)),B=!0,', 1),
-    ('tt=async ue=>{const{id:me,content:Ne}=ue.detail;if(te===me){', 'tt=async ue=>{const{id:me,content:Ne}=ue.detail;__ll("chunk:"+(te===me)+":"+Ne.length+":"+Ne.slice(0,8));if(te===me){', 1),
+    ('tt=async ue=>{const{id:me,content:Ne}=ue.detail;if(te===me){', 'tt=async ue=>{const{id:me,content:Ne}=ue.detail;__ll("chunk:"+(te===me)+":"+Ne.length);if(te===me){', 1),
     ('Xe=async ue=>{const{id:me,content:Ne}=ue.detail;ce[me]=!0,B=!1}', 'Xe=async ue=>{const{id:me,content:Ne}=ue.detail;__ll("finish:"+Ne.length),ce[me]=!0,B=!1}', 1),
     # et(): the sequential playback loop
     ('else Ge[ue].unshift(Ye),`${Ye}`,await new Promise(ye=>setTimeout(ye,200))', 'else Ge[ue].unshift(Ye),__llw!==Ye&&(__llw=Ye,__ll("loop:wait:"+Ye.length)),await new Promise(ye=>setTimeout(ye,200))', 1),
