@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Voice Buddy — a voice assistant that never leaves your mini PC</title>
+<meta name="description" content="Talk to a 27B open model out loud, entirely on a Ryzen AI mini PC with 32 GB: Open WebUI, Qwen3.8-27B on the iGPU, speech recognition and a natural voice on the NPU. No cloud, no account.">
+<style>
+:root{--blue:#2a78d6;--orange:#eb6834;--ink:#1c1b19;--ink2:#56544f;--mute:#8a8780;--bg:#fbfaf7;--card:#fff;--rule:#e3e1db}
+@media (prefers-color-scheme:dark){:root{--blue:#3987e5;--orange:#d95926;--ink:#f3f1ec;--ink2:#c4c1b9;--mute:#8e8b84;--bg:#161513;--card:#1f1e1b;--rule:#3a3a37}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--blue)}
+main{max-width:960px;margin:0 auto;padding:48px 24px 80px}
+.kicker{font:600 13px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+h1{font-size:48px;line-height:1.1;margin:12px 0 10px}
+.lead{font-size:22px;color:var(--ink2);margin:0 0 24px;max-width:720px}
+h2{font-size:26px;margin:56px 0 14px}
+.btns a{display:inline-block;margin:0 10px 10px 0;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600}
+.btns .p{background:var(--blue);color:#fff}.btns .s{border:1px solid var(--rule);color:var(--ink)}
+video{width:100%;border-radius:12px;border:1px solid var(--rule);background:#000;display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:18px 20px}
+.card h3{margin:0 0 6px;font-size:18px}.card p{margin:0;color:var(--ink2)}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:13px;font-weight:600;color:#fff;margin-bottom:8px}
+.b{background:var(--blue)}.o{background:var(--orange)}
+table{border-collapse:collapse;width:100%;font-size:16px}
+td,th{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+td b{font-size:18px}
+pre{background:#1c1b19;color:#f3f1ec;padding:18px 20px;border-radius:10px;overflow:auto;font:15px/1.6 ui-monospace,Menlo,monospace}
+pre b{color:#8fc1ff;font-weight:600}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.92em;background:var(--card);border:1px solid var(--rule);padding:1px 6px;border-radius:5px}
+.note{color:var(--ink2);font-size:15px}
+footer{margin-top:64px;color:var(--mute);font-size:14px;border-top:1px solid var(--rule);padding-top:18px}
+.lang{position:absolute;top:20px;right:24px;display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;font-size:14px}
+.lang button{background:none;border:0;padding:6px 12px;color:var(--ink2);cursor:pointer;font:inherit}
+.lang button.on{background:var(--blue);color:#fff}
+html[data-lang=en] .zh,html[data-lang=zh] .en{display:none!important}
+html[data-lang=zh] body{font-family:system-ui,-apple-system,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+main{position:relative}
+@media (max-width:640px){main{padding-top:68px}h1{font-size:36px}.lead{font-size:19px}h2{margin-top:44px}}
+.samples{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:14px}
+.samples .card audio{width:100%;margin-top:8px}
+.samples .card .t{font-size:14px;color:var(--ink2);margin-top:4px;line-height:1.45}
+</style>
+<script>
+(function(){var q=new URLSearchParams(location.search).get('lang'),s=null;try{s=localStorage.getItem('lang')}catch(e){}
+var l=q||s||((navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en');if(l!=='zh')l='en';
+document.documentElement.dataset.lang=l;document.documentElement.lang=l==='zh'?'zh-CN':'en';})();
+function setLang(l){document.documentElement.dataset.lang=l;document.documentElement.lang=l==='zh'?'zh-CN':'en';
+try{localStorage.setItem('lang',l)}catch(e){}document.querySelectorAll('.lang button').forEach(function(b){b.classList.toggle('on',b.dataset.l===l)});
+document.querySelectorAll('video').forEach(function(v){v.pause()});}
+document.addEventListener('DOMContentLoaded',function(){setLang(document.documentElement.dataset.lang)});
+</script>
+<style>.grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.shot{width:100%;border-radius:12px;border:1px solid var(--rule);display:block}</style>
+</head>
+<body>
+<main>
+  <div class="lang"><button data-l="en" onclick="setLang('en')">EN</button><button data-l="zh" onclick="setLang('zh')">中文</button></div>
+  <div class="kicker">open source · Apache-2.0 · Ryzen AI 7040 / 8040 · 32 GB</div>
+  <h1>Local Voice Buddy</h1>
+  <p class="lead en">A voice assistant that lives on your mini PC. You talk, it answers out loud, in Chinese or English. The model, your voice and your chats never leave the machine: no cloud, no account, no subscription.</p>
+  <p class="lead zh">住在你迷你主机里的语音助手。你说话，它开口回答，中文英文都行。模型、你的声音和聊天记录都不离开这台机器：不用云、不用注册、不用订阅。</p>
+  <div class="btns">
+    <a class="p" href="https://github.com/YuhuaBillChen/local_voice_buddy"><span class="en">Get it on GitHub</span><span class="zh">GitHub 下载</span></a>
+    <a class="s" href="https://github.com/YuhuaBillChen/local_voice_buddy#install"><span class="en">Install guide</span><span class="zh">安装说明</span></a>
+    <a class="s" href="https://github.com/YuhuaBillChen/local_voice_buddy/blob/main/docs/measurements.md"><span class="en">Measurements</span><span class="zh">实测数据</span></a>
+  </div>
+
+  <img class="shot" src="screenshot_chat.png" alt="A voice conversation in Local Voice Buddy">
+  <p class="note en">A voice call, as it appears in the chat afterwards: two questions in Chinese, one in English, all spoken, recognized and answered on the PC.</p>
+  <p class="note zh">一次语音通话结束后的聊天记录：两句中文、一句英文，识别、思考、朗读全在这台电脑上完成。</p>
+
+  <h2><span class="en">What you get</span><span class="zh">你会得到什么</span></h2>
+  <div class="grid">
+    <div class="card"><span class="pill b">LLM</span><h3><span class="en">A real 27B brain</span><span class="zh">真正的 27B 大模型</span></h3><p class="en">Qwen3.8-27B, a 27-billion-parameter open model, on the built-in Radeon GPU.</p><p class="zh">Qwen3.8-27B，开源模型，跑在主机自带的 Radeon 核显上。</p></div>
+    <div class="card"><span class="pill o">NPU</span><h3><span class="en">Ears and a voice</span><span class="zh">会听也会说</span></h3><p class="en">Whisper speech recognition and the CosyVoice3 voice run on the Ryzen AI NPU, the chip most owners never use.</p><p class="zh">Whisper 语音识别和 CosyVoice3 语音合成跑在锐龙 AI 的 NPU 上，就是那块大多数人从来没用过的芯片。</p></div>
+    <div class="card"><span class="pill b">Voice</span><h3><span class="en">Any voice you like</span><span class="zh">想要什么声音都行</span></h3><p class="en">10 seconds of recording and a line of text, and it answers in that voice.</p><p class="zh">录 10 秒声音、写下说了什么，它就用这个声音回答你。</p></div>
+    <div class="card"><span class="pill o">Phone</span><h3><span class="en">From the sofa</span><span class="zh">躺沙发上也能用</span></h3><p class="en">Open WebUI works in any browser; install it on your phone's home screen and call it like an app.</p><p class="zh">Open WebUI 在任何浏览器里都能用，装到手机桌面，像打电话一样跟它聊。</p></div>
+  </div>
+
+  <h2><span class="en">How it sounds</span><span class="zh">听听效果</span></h2>
+  <video class="en" controls preload="metadata" poster="https://yuhuabillchen.github.io/npu-cosyvoice/demo_en_poster.jpg"><source src="https://yuhuabillchen.github.io/npu-cosyvoice/demo_en.mp4" type="video/mp4"></video>
+  <video class="zh" controls preload="metadata" poster="https://yuhuabillchen.github.io/npu-cosyvoice/demo_poster.jpg"><source src="https://yuhuabillchen.github.io/npu-cosyvoice/demo.mp4" type="video/mp4"></video>
+  <p class="note en">The speech side of Local Voice Buddy, from its <a href="https://yuhuabillchen.github.io/npu-cosyvoice/">npu-cosyvoice</a> project page.</p>
+  <p class="note zh">Local Voice Buddy 的语音部分，来自 <a href="https://yuhuabillchen.github.io/npu-cosyvoice/">npu-cosyvoice</a> 项目页。</p>
+
+  <h2><span class="en">What you need</span><span class="zh">需要什么</span></h2>
+  <table>
+    <tr><td><span class="en">Computer</span><span class="zh">电脑</span></td><td><span class="en">Mini PC or laptop with a <b>Ryzen AI 7040 / 8040</b> (e.g. 7840HS, 8845HS)</span><span class="zh">带 <b>锐龙 AI 7040 / 8040</b> 的迷你主机或笔记本（如 7840HS、8845HS）</span></td></tr>
+    <tr><td><span class="en">Memory</span><span class="zh">内存</span></td><td><b>32 GB</b></td></tr>
+    <tr><td><span class="en">Disk</span><span class="zh">硬盘</span></td><td><span class="en">50 GB free</span><span class="zh">50 GB 空闲</span></td></tr>
+    <tr><td><span class="en">System</span><span class="zh">系统</span></td><td><span class="en">Linux 6.14+ (tested on Ubuntu 26.04) with Docker</span><span class="zh">Linux 6.14 以上（在 Ubuntu 26.04 上测试）并装好 Docker</span></td></tr>
+  </table>
+
+  <h2><span class="en">Install</span><span class="zh">安装</span></h2>
+<pre>git clone https://github.com/YuhuaBillChen/local_voice_buddy.git
+cd local_voice_buddy
+<b>./install.sh</b></pre>
+  <p class="note en">The installer checks your machine, explains each system change before asking for your password, downloads about 22 GB and starts everything. Then open <code>http://localhost:3000</code> and press the voice button.</p>
+  <p class="note zh">安装脚本会先检查机器，每项系统改动都先解释再请你输入密码，然后下载约 22 GB 并启动。之后打开 <code>http://localhost:3000</code>，按语音按钮就能开聊。</p>
+
+  <h2><span class="en">Numbers</span><span class="zh">实测</span></h2>
+  <table>
+    <tr><td><span class="en">Reply starts speaking</span><span class="zh">说完到听到回答</span></td><td><b>8-10 s</b> <span class="en">in a conversation (~20 s for a new chat's first message)</span><span class="zh">（新对话第一句约 20 秒）</span></td></tr>
+    <tr><td><span class="en">Memory, everything running</span><span class="zh">全部运行时内存</span></td><td><b>~24 GB</b> <span class="en">of a 32 GB machine</span><span class="zh">（32 GB 机器）</span></td></tr>
+    <tr><td><span class="en">Model speed</span><span class="zh">模型速度</span></td><td><b>7-11</b> <span class="en">tokens/s</span><span class="zh">token/秒</span></td></tr>
+  </table>
+  <p class="note en">Ryzen 7 8845HS, 32 GB. Details in <a href="https://github.com/YuhuaBillChen/local_voice_buddy/blob/main/docs/measurements.md">measurements.md</a>.</p>
+  <p class="note zh">锐龙 7 8845HS，32 GB。详见 <a href="https://github.com/YuhuaBillChen/local_voice_buddy/blob/main/docs/measurements.md">measurements.md</a>。</p>
+
+  <footer><span class="en">Built on</span><span class="zh">基于</span> <a href="https://github.com/open-webui/open-webui">Open WebUI</a>, <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>, <a href="https://huggingface.co/unsloth/Qwen3.8-27B-GGUF">Qwen3.8-27B</a>, <a href="https://github.com/YuhuaBillChen/npu-cosyvoice">npu-cosyvoice</a> (CosyVoice3 + <a href="https://github.com/drakosha/whisper-xdna">whisper-xdna</a>). Apache-2.0.</footer>
+</main>
+</body>
+</html>

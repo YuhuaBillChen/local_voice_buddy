@@ -1,0 +1,141 @@
+# Local Voice Buddy: Open WebUI + Qwen3.8-27B on the Radeon iGPU + speech in and out on the Ryzen AI NPU.
+# Run ./install.sh rather than this file directly; it checks the machine, writes .env and downloads the model.
+#
+#   webui   http://<this machine>:3000      Open WebUI with voice-call fixes (webui/)
+#   llm     llama.cpp (Vulkan) serving Qwen3.8-27B, only reachable by webui
+#   voice   CosyVoice3 TTS on the NPU + /v1/audio/transcriptions, from npu-cosyvoice
+#   whisper whisper-xdna large-v3-turbo STT on the NPU, from npu-cosyvoice
+
+x-npu: &npu
+  devices:
+    - /dev/accel/accel0
+  group_add:
+    - "${RENDER_GID:-991}"
+  cap_add:
+    - IPC_LOCK
+  ulimits:
+    memlock: -1
+
+# The speech services are built from https://github.com/YuhuaBillChen/npu-cosyvoice at a fixed tag, unless
+# the prebuilt image can be pulled. NPU_COSYVOICE_SRC can point at a local checkout instead.
+x-npu-cosyvoice: &npu-cosyvoice
+  context: "${NPU_COSYVOICE_SRC:-https://github.com/YuhuaBillChen/npu-cosyvoice.git#v0.1.0}"
+  dockerfile: docker/Dockerfile
+
+services:
+  setup:
+    profiles: [setup]
+    build: {<<: *npu-cosyvoice, target: voice}
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.0
+    command: bash voice/setup.sh
+    volumes:
+      - voice-data:/data
+
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-vulkan@sha256:dd3596f23676ccaf7fd07d23e22293e99d9a54f9b7ee2d294bcc593d38eb03e5
+    devices:
+      - /dev/dri
+    group_add:
+      - "${RENDER_GID:-991}"
+      - "${VIDEO_GID:-44}"
+    volumes:
+      - ./models:/models:ro
+    command: >-
+      --model /models/Qwen3.8-27B-UD-Q4_K_M.gguf --alias qwen3.8-27b
+      --host 0.0.0.0 --port 8080
+      --n-gpu-layers 99 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0
+      --ctx-size ${CONTEXT:-32768} --parallel 1 --batch-size 256 --ubatch-size 64
+      --spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-type-k q8_0 --spec-draft-type-v q8_0
+      --ctx-checkpoints 8 --checkpoint-min-step 256 --cache-ram 0
+      --reasoning ${THINKING:-off}
+    restart: unless-stopped
+
+  voice:
+    <<: *npu
+    build: {<<: *npu-cosyvoice, target: voice}
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.0
+    environment:
+      STT_URL: http://whisper:8090
+      DEFAULT_SPEED: "${SPEECH_SPEED:-1.1}"
+      MALLOC_ARENA_MAX: "2"
+    volumes:
+      - voice-data:/data
+    restart: unless-stopped
+    # loading briefly takes several GB more than running; on 32 GB the three models load one at a time
+    depends_on:
+      llm: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      start_period: 10m
+
+  whisper:
+    <<: *npu
+    build: {<<: *npu-cosyvoice, target: whisper}
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-whisper:0.1.0
+    environment:
+      NPU_STT_MAX_CTX: "5"          # XDNA1 has 6 contexts; the TTS keeps one
+      NPU_STT_MODEL: large-v3-turbo
+      NPU_STT_LANG: auto
+      NPU_STT_LADDER: "768,1500"
+      NPU_STT_DEFAULT_CTX: "768"
+      NPU_STT_TORCH_THREADS: "4"
+    volumes:
+      - whisper-models:/root/.cache/whisper
+      - whisper-aot:/opt/npu-whisper/aot
+    restart: unless-stopped
+    depends_on:
+      voice: {condition: service_healthy}
+    healthcheck:
+      # the first start compiles the NPU overlays, which takes several minutes
+      test: ["CMD", "/opt/npu-whisper/refenv/bin/python", "-c", "import json, sys, urllib.request; sys.exit(json.load(urllib.request.urlopen('http://localhost:8090/health'))['status'] != 'ok')"]
+      interval: 10s
+      start_period: 30m
+
+  webui:
+    build: webui
+    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.0
+    ports:
+      - "${WEBUI_BIND:-0.0.0.0}:${WEBUI_PORT:-3000}:8080"
+    environment:
+      WEBUI_NAME: Local Voice Buddy
+      WEBUI_SECRET_KEY_FILE: /app/backend/data/.webui_secret_key  # in the volume, so updates keep you logged in
+      # Open WebUI reads these on first start only; later changes are made in Admin Settings
+      ENABLE_OLLAMA_API: "False"
+      OPENAI_API_BASE_URL: http://llm:8080/v1
+      OPENAI_API_KEY: local
+      DEFAULT_MODELS: qwen3.8-27b
+      AUDIO_STT_ENGINE: openai
+      AUDIO_STT_OPENAI_API_BASE_URL: http://voice:8000/v1
+      AUDIO_STT_OPENAI_API_KEY: local
+      AUDIO_STT_MODEL: whisper
+      AUDIO_TTS_ENGINE: openai
+      AUDIO_TTS_OPENAI_API_BASE_URL: http://voice:8000/v1
+      AUDIO_TTS_OPENAI_API_KEY: local
+      AUDIO_TTS_MODEL: cosyvoice3
+      AUDIO_TTS_VOICE: "${VOICE:-default}"
+      AUDIO_TTS_SPLIT_ON: punctuation
+      # one chat model with one slot: side requests (titles, tags, follow-ups) would wait in line and
+      # evict the conversation from its cache, so the next voice turn would start from scratch
+      ENABLE_TITLE_GENERATION: "False"
+      ENABLE_TAGS_GENERATION: "False"
+      ENABLE_FOLLOW_UP_GENERATION: "False"
+      ENABLE_AUTOCOMPLETE_GENERATION: "False"
+      ENABLE_RETRIEVAL_QUERY_GENERATION: "False"
+      ENABLE_SEARCH_QUERY_GENERATION: "False"
+      # tool descriptions are read before every new chat; each one costs time (webui/patches/patch_openwebui_builtin_tools.py)
+      BUILTIN_TOOLS: "${BUILTIN_TOOLS:-time}"
+      ENABLE_VERSION_UPDATE_CHECK: "False"  # updates come with this repository (see README)
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      ANONYMIZED_TELEMETRY: "false"
+    volumes:
+      - webui-data:/app/backend/data
+    depends_on: [llm, voice]
+    restart: unless-stopped
+
+volumes:
+  voice-data:
+  whisper-models:
+  whisper-aot:
+  webui-data:
