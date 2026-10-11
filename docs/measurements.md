@@ -3,6 +3,13 @@
 Ryzen 7 8845HS (Radeon 780M, XDNA1 NPU), 32 GB RAM of which Linux sees 27.7 GB (the BIOS reserves 3 GB
 for the GPU), Ubuntu 26.04, kernel 7.0, default settings (`CONTEXT=32768`, `THINKING=off`). 2026-10-10.
 
+## Installing
+
+A clean install on this machine, with the images built here rather than pulled: 7 minutes to download the
+chat model (40 MB/s), about 10 minutes to build the speech images and prepare the speech models (without
+the prebuilt files from Hugging Face), 2 minutes for the recognizer to compile its NPU programs on its
+first start. A voice call on that fresh instance behaved as below.
+
 ## Memory
 
 | | |

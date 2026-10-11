@@ -123,6 +123,6 @@ Memory use and response times, measured on a 32 GB Ryzen 7 8845HS: [docs/measure
 ## Licenses
 
 This repository: Apache-2.0. It downloads and runs, without modifying them except as noted:
-Open WebUI (its own license, which keeps the Open WebUI branding; patched at build time by
-`webui/patches/`), llama.cpp (MIT), Qwen3.8-27B (Apache-2.0, GGUF by Unsloth), npu-cosyvoice
+Open WebUI (its own license: BSD-3-Clause plus keeping the Open WebUI branding, which stays as is;
+patched at build time by `webui/patches/`), llama.cpp (MIT), Qwen3.8-27B (Apache-2.0, GGUF by Unsloth), npu-cosyvoice
 (Apache-2.0) with CosyVoice3 (Apache-2.0) and whisper-xdna (MIT). See NOTICE.
