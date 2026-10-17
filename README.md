@@ -9,7 +9,7 @@ nothing leaves the machine: no account, no cloud, no subscription.
   (CosyVoice3) on the Ryzen AI NPU, which otherwise sits idle; it can also speak in a voice you record
 - Chinese and English, mixed freely
 
-Website: <https://yuhuabillchen.github.io/local_voice_buddy/>
+Website, with recordings of it in use: <https://yuhuabillchen.github.io/local_voice_buddy/>
 
 ## What you need
 
@@ -45,8 +45,11 @@ first one is the admin), and press the round voice button at the right end of th
 start talking.
 
 It starts by itself after every reboot. On the very first start the speech recognizer spends a few
-minutes preparing itself for the NPU. In a conversation, the reply starts speaking about 8 to 10
-seconds after you stop talking (the first message of a new chat takes about 20).
+minutes preparing itself for the NPU. In a conversation, the reply starts speaking about 8 to 13
+seconds after you stop talking (the very first message after a restart takes about 20).
+
+To stop a reply, tap the call screen. To interrupt it by talking instead, turn on Settings >
+Interface > Allow Voice Interruption in Call (off by default).
 
 ## Use it from your phone
 
@@ -87,6 +90,7 @@ Edit `.env` and run `docker compose up -d`:
 | `CONTEXT` | 32768 | how much of the conversation the model keeps in view, in tokens |
 | `THINKING` | off | `on` lets the model think before answering: better at hard questions, too slow for talking |
 | `SPEECH_SPEED` | 1.1 | speaking speed |
+| `STT_BEAM_SIZE` | 1 | speech recognition search width, 1-8; higher is slower and not reliably more accurate |
 | `VOICE` | default | voice Open WebUI starts with; read on its first start only, afterwards Admin Settings > Audio |
 | `WEBUI_PORT` | 3000 | |
 
@@ -114,9 +118,10 @@ The speech side is [npu-cosyvoice](https://github.com/YuhuaBillChen/npu-cosyvoic
 own README and a technical report; this repository combines it with a chat model and a
 ready-to-use interface. `webui/patches/` are small fixes to Open WebUI's voice mode, each explained
 at the top of its file: Chinese replies start speaking sentence by sentence instead of after the
-whole answer, recognition starts while you pause rather than after, read-aloud fetches the next
-sentence while one plays, sentences are not cut mid-word, and phones no longer go silent after a
-few replies.
+whole answer, recognition starts while you pause rather than after, the first syllable of what
+you say is no longer cut off, stopping a reply really stops it, read-aloud fetches the next sentence
+while one plays, sentences are not cut mid-word, and phones no longer go silent after a few replies.
+They are written against Open WebUI v0.12.3, which `webui/Dockerfile` pins.
 
 Memory use and response times, measured on a 32 GB Ryzen 7 8845HS: [docs/measurements.md](docs/measurements.md).
 

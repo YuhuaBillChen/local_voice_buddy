@@ -1,0 +1,62 @@
+{
+ "scope": "Functional recordings of the app, not an accuracy or typical-latency benchmark.",
+ "capture": {
+  "openWebUI": "0.12.3",
+  "baseDigest": "sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def",
+  "services": "this repository's compose.yml (llm, voice, whisper, webui), fresh install",
+  "syntheticMicrophone": true,
+  "spokenInterruption": false
+ },
+ "videos": {
+  "voice-mode": {
+   "duration_s": 90.23,
+   "bytes": 1962799,
+   "sha256": "ea17bdeba75ae266b069bab77a3a7ecd087710116f5d90bffbb1be45f77ff346",
+   "page_errors": [],
+   "speech_requests": 13,
+   "first_sound_after_question_s": [
+    7.8,
+    12.5
+   ]
+  },
+  "voice-mode-en": {
+   "duration_s": 110.1,
+   "bytes": 2637412,
+   "sha256": "18fe5b1628d87a42175ef183a95265c4bdaf84ef59b1d911985af7f68332e739",
+   "page_errors": [],
+   "speech_requests": 11,
+   "first_sound_after_question_s": [
+    16.9,
+    10.9
+   ]
+  },
+  "voice-input": {
+   "duration_s": 49.92,
+   "bytes": 560205,
+   "sha256": "a0b6495e9da4c834f88bd402d948819bad5c2b0d7721d81b34064fcb38f1f702",
+   "page_errors": [],
+   "speech_requests": 0
+  },
+  "voice-input-en": {
+   "duration_s": 23.52,
+   "bytes": 242522,
+   "sha256": "255794ccd037f96253411d4be7362cd185a5d72dee5fc65e03187e0a35e60e1b",
+   "page_errors": [],
+   "speech_requests": 0
+  },
+  "read-aloud": {
+   "duration_s": 58.23,
+   "bytes": 1637026,
+   "sha256": "a41a6a2bf32020717ef8a793613ce24f4f1a56a7ba88cac46389da5ef1cf568f",
+   "page_errors": [],
+   "speech_requests": 13
+  },
+  "read-aloud-en": {
+   "duration_s": 9.91,
+   "bytes": 152301,
+   "sha256": "9de7bf255b76f9e4148439990523dfdf6574a5d30698d6087090b888917c6f1f",
+   "page_errors": [],
+   "speech_requests": 2
+  }
+ }
+}

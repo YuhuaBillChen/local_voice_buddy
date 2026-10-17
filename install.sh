@@ -3,6 +3,7 @@
 # Safe to run again; finished steps are skipped. Run it from this folder as your normal user (not root).
 set -euo pipefail
 cd "$(dirname "$0")"
+source scripts/install_helpers.sh
 
 MODEL_URL=https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q4_K_M.gguf
 MODEL_FILE=models/Qwen3.8-27B-UD-Q4_K_M.gguf
@@ -19,6 +20,8 @@ say "Checking this machine"
 [ "$(id -u)" != 0 ] || fail "run it as your normal user, not root (it asks for sudo when needed)"
 [ -e /dev/accel/accel0 ] || fail "no NPU found (/dev/accel/accel0). This needs a Ryzen AI 7040/8040 CPU and the amdxdna driver (Linux 6.14 or newer)."
 ls /dev/dri/renderD* >/dev/null 2>&1 || fail "no GPU render device in /dev/dri"
+command -v python3 >/dev/null || fail "Python 3 is required"
+command -v curl >/dev/null || fail "curl is required"
 command -v docker >/dev/null || fail "Docker is not installed: https://docs.docker.com/engine/install/"
 docker compose version >/dev/null 2>&1 || fail "the Docker compose plugin is missing (package docker-compose-v2 or docker-compose-plugin)"
 docker info >/dev/null 2>&1 || fail "cannot talk to Docker; add yourself to the docker group (sudo usermod -aG docker \$USER) and log in again"
@@ -27,7 +30,7 @@ vram_kb=$(cat /sys/class/drm/card*/device/mem_info_vram_total 2>/dev/null | awk 
 mem_gb=$(awk -v v="${vram_kb:-0}" '/MemTotal/ {printf "%d", ($2+v)/1048576}' /proc/meminfo)
 [ "$mem_gb" -ge 30 ] || fail "found ${mem_gb} GB of memory; this needs a 32 GB machine"
 free_gb=$(df -BG --output=avail . | tail -1 | tr -dc 0-9)
-[ -f "$MODEL_FILE.ok" ] || [ "$free_gb" -ge 60 ] || fail "needs about 60 GB of free disk here, found ${free_gb} GB"
+[ -f "$MODEL_FILE" ] || [ "$free_gb" -ge 60 ] || fail "needs about 60 GB of free disk here, found ${free_gb} GB"
 echo "ok: NPU, GPU, Docker, ${mem_gb} GB RAM, ${free_gb} GB free disk"
 
 say "Preparing the system (needs sudo once)"
@@ -57,12 +60,21 @@ done
 if [ "$gtt_gb" -lt "$NEED_GTT_GB" ]; then
   echo "The GPU may only use ${gtt_gb} GB of system memory; the model needs ${NEED_GTT_GB} GB."
   echo "Fix: add  amdgpu.gttsize=24576 ttm.pages_limit=6291456  to the kernel command line and reboot."
-  if grep -q amdgpu.gttsize /etc/default/grub 2>/dev/null; then
-    echo "/etc/default/grub already has them: reboot, then run ./install.sh again."
-  elif [ -f /etc/default/grub ] && ask "Add them to /etc/default/grub and update grub now?"; then
-    sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/&amdgpu.gttsize=24576 ttm.pages_limit=6291456 /' /etc/default/grub
+  if python3 scripts/install_support.py grub-ready /etc/default/grub 2>/dev/null; then
+    echo "Both requested parameters are configured. If this boot already uses them, inspect the GPU/driver configuration."
+    echo "Otherwise reboot, then run ./install.sh again."
+  elif [ -f /etc/default/grub ] && ask "Update the two GPU memory parameters in /etc/default/grub and rebuild GRUB?"; then
+    grub_tmp=$(mktemp)
+    trap 'rm -f "$grub_tmp"' EXIT
+    python3 scripts/install_support.py grub-render /etc/default/grub > "$grub_tmp"
+    sudo cp -p /etc/default/grub "/etc/default/grub.voice-buddy.$(date +%Y%m%d%H%M%S).bak"
+    sudo tee /etc/default/grub < "$grub_tmp" >/dev/null
     sudo update-grub
+    rm -f "$grub_tmp"
+    trap - EXIT
     echo "Reboot, then run ./install.sh again."
+  else
+    echo "Configure both parameters with your bootloader before continuing."
   fi
   exit 1
 fi
@@ -76,35 +88,35 @@ if [ ! -f .env ]; then
 fi
 set -a; . ./.env; set +a
 
-if [ ! -f "$MODEL_FILE.ok" ]; then
+if ! model_verified "$MODEL_FILE" "$MODEL_SIZE" "$MODEL_SHA256"; then
   say "Downloading Qwen3.8-27B (16.5 GB; an interrupted download resumes)"
   mkdir -p models
   # curl refuses to resume a file that is already complete, so skip the download then and just check it
-  [ "$(stat -c %s "$MODEL_FILE" 2>/dev/null)" = "$MODEL_SIZE" ] || curl -fL --retry 5 -C - -o "$MODEL_FILE" "$MODEL_URL"
+  [ "$(stat -Lc %s "$MODEL_FILE" 2>/dev/null)" = "$MODEL_SIZE" ] || curl -fL --retry 5 -C - -o "$MODEL_FILE" "$MODEL_URL"
   echo "checking the download..."
-  echo "$MODEL_SHA256  $MODEL_FILE" | sha256sum -c --quiet - || fail "the model file is damaged; delete $MODEL_FILE and run again"
+  model_verified "$MODEL_FILE" "$MODEL_SIZE" "$MODEL_SHA256" || fail "the model file is damaged; delete $MODEL_FILE and run again"
   touch "$MODEL_FILE.ok"
 fi
 
 say "Getting the programs (prebuilt where available, otherwise built here: 20-40 minutes)"
-docker compose --profile setup pull --ignore-pull-failures --quiet 2>/dev/null || true
+prepare_images
 say "Preparing the speech models (downloads ~5 GB the first time)"
-docker compose run --rm setup
+docker compose run --rm --no-deps --pull never setup
 
 say "Starting"
-docker compose up -d  # builds whatever could not be pulled
-echo "Waiting for the chat model and the voice to load (a few minutes on first start)..."
-for _ in $(seq 120); do
-  if docker compose exec -T voice python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" >/dev/null 2>&1 \
-    && docker compose exec -T webui curl -sf http://llm:8080/health >/dev/null 2>&1; then
-    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+docker compose up -d --no-build --pull never
+echo "Waiting for chat, synthesis, recognition and the web interface (first-start NPU compilation can take several minutes)..."
+for _ in $(seq 480); do
+  if services_ready; then
+    web_port=$(published_webui_port) || fail "cannot determine the web interface port; see docker compose ps"
+    web_host=${WEBUI_BIND:-0.0.0.0}
+    [[ "$web_host" != 0.0.0.0 ]] || web_host=localhost
     say "Ready"
-    echo "Open http://localhost:${WEBUI_PORT:-3000} on this machine, or http://${ip:-<this machine>}:${WEBUI_PORT:-3000} from another"
-    echo "computer at home. The first account you create is the admin. For a phone, see 'Use it from your phone'"
-    echo "in README.md. Speech recognition compiles itself on the first start; the first voice message can take"
-    echo "a few minutes (docker compose logs -f whisper)."
+    echo "Open http://${web_host}:${web_port} on this machine. The first account you create is the admin."
+    echo "For another computer or phone, see 'Use it from your phone'"
+    echo "in README.md. Chat and both speech services are ready."
     exit 0
   fi
   sleep 5
 done
-fail "not ready after 10 minutes; see docker compose logs"
+fail "not ready after the startup wait; see docker compose logs"

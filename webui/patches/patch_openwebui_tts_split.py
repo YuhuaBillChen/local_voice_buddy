@@ -36,8 +36,9 @@ now also splits after , ; : and merges progressively: >= 3 words and 15, then
 """
 from pathlib import Path
 import sys
+import os
 
-CHUNKS = Path("/app/build/_app/immutable/chunks")
+CHUNKS = Path(os.environ.get("OWUI_CHUNKS", "/app/build/_app/immutable/chunks"))
 SPLIT_STOCK = '"(?<=[.!?])\\\\s+|\\\\n+"'
 SPLIT_V1 = '"(?<=[.!?])\\\\s+|(?<=[。！？；])\\\\s*|\\\\n+"'
 SPLIT_V2 = '"(?<=[.!?])\\\\s+|(?<=[。！？；，])\\\\s*|\\\\n+"'
@@ -89,6 +90,14 @@ for path in CHUNKS.glob("*.js"):
         continue
     patched += 1
     original = text
+    # v0.12.0 swaps the reducer's local index/content variable names.
+    modern_head = 'const s=e.length-1;if(s>=0){const r=e[s],i=r.split(/\\s+/).length,a=r.length;'
+    modern_tail = 'e[s]=r+" "+t:e.push(t)}else e.push(t);return e},[])'
+    if modern_head in text:
+        if text.count(modern_head) != 1 or text.count(modern_tail) != 1:
+            sys.exit(f"{path.name}: ambiguous v0.12 splitter; not patched")
+        text = text.replace(modern_head, 'const r=e.length-1;if(r>=0){const s=e[r],i=s.split(/\\s+/).length,a=s.length;')
+        text = text.replace(modern_tail, REDUCE_END)
     if split_old:
         if text.count(split_old) != 1:
             sys.exit(f"{path.name}: unexpected OWUI build, TTS split patch not applied")

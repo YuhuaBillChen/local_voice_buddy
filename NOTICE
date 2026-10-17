@@ -3,7 +3,8 @@ Copyright 2026 the Local Voice Buddy authors
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-This project downloads and runs, but does not redistribute, the following:
+This project builds on the following. The published container images include them, with their notices;
+models are downloaded separately under their own terms.
 
 - Open WebUI (https://github.com/open-webui/open-webui), Open WebUI License (BSD-3-Clause with a
   branding clause). webui/Dockerfile builds on its published image and webui/patches/ edit its built

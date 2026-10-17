@@ -19,15 +19,17 @@ x-npu: &npu
 # The speech services are built from https://github.com/YuhuaBillChen/npu-cosyvoice at a fixed tag, unless
 # the prebuilt image can be pulled. NPU_COSYVOICE_SRC can point at a local checkout instead.
 x-npu-cosyvoice: &npu-cosyvoice
-  context: "${NPU_COSYVOICE_SRC:-https://github.com/YuhuaBillChen/npu-cosyvoice.git#v0.1.0}"
+  context: "${NPU_COSYVOICE_SRC:-https://github.com/YuhuaBillChen/npu-cosyvoice.git#v0.1.1}"
   dockerfile: docker/Dockerfile
 
 services:
   setup:
     profiles: [setup]
     build: {<<: *npu-cosyvoice, target: voice}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.0
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.1
     command: bash voice/setup.sh
+    environment:
+      PREBUILT_REPO: "${PREBUILT_REPO-billchen42/npu-cosyvoice}"
     volumes:
       - voice-data:/data
 
@@ -53,7 +55,7 @@ services:
   voice:
     <<: *npu
     build: {<<: *npu-cosyvoice, target: voice}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.0
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.1
     environment:
       STT_URL: http://whisper:8090
       DEFAULT_SPEED: "${SPEECH_SPEED:-1.1}"
@@ -72,12 +74,13 @@ services:
   whisper:
     <<: *npu
     build: {<<: *npu-cosyvoice, target: whisper}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-whisper:0.1.0
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-whisper:0.1.1
     environment:
       NPU_STT_MAX_CTX: "5"          # XDNA1 has 6 contexts; the TTS keeps one
       NPU_STT_MODEL: large-v3-turbo
       NPU_STT_LANG: auto
       NPU_STT_LADDER: "768,1500"
+      NPU_STT_BEAM_SIZE: "${STT_BEAM_SIZE:-1}"  # 1 = greedy, the fastest
       NPU_STT_DEFAULT_CTX: "768"
       NPU_STT_TORCH_THREADS: "4"
     volumes:
@@ -94,7 +97,7 @@ services:
 
   webui:
     build: webui
-    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.0
+    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.1
     ports:
       - "${WEBUI_BIND:-0.0.0.0}:${WEBUI_PORT:-3000}:8080"
     environment:
@@ -105,6 +108,8 @@ services:
       OPENAI_API_BASE_URL: http://llm:8080/v1
       OPENAI_API_KEY: local
       DEFAULT_MODELS: qwen3.8-27b
+      # Keep the local HTTP STT/TTS path; Realtime requires a separate WebSocket provider.
+      AUDIO_REALTIME_ENABLED: "false"
       AUDIO_STT_ENGINE: openai
       AUDIO_STT_OPENAI_API_BASE_URL: http://voice:8000/v1
       AUDIO_STT_OPENAI_API_KEY: local

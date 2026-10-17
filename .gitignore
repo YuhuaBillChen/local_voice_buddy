@@ -1,2 +1,12 @@
 .env
 models/
+
+# Local state must not enter a release.
+.env.*
+!.env.example
+voices/
+*.log
+*.pem
+*.key
+__pycache__/
+*.pyc

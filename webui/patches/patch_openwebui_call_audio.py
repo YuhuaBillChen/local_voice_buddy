@@ -53,18 +53,29 @@
    recording only after 1.2 s of silence and only then uploads the utterance,
    so STT (~2.5 s on the NPU, almost all of it the Whisper encoder, which has
    to see the whole window and cannot be fed incrementally) ran strictly after
-   that wait. After 0.5 s of silence the overlay now asks the recorder for the
+   that wait. After 0.85 s of silence the overlay now asks the recorder for the
    audio so far and starts transcribing it. If no sound follows before the
    recorder stops, that result is used instead of uploading the recording
    again (the rest is silence); any sound discards it. A pause the user talks
    through costs one wasted NPU run, which can delay the next transcription by
    up to its remaining ~2 s.
+
+9. Interrupting paused the current audio without cancelling the playback loop.
+   After its settle delay, the loop played the next queued chunk of the old
+   reply. Abort that loop before pausing, for both voice and tap interruption.
+
+10. Starting MediaRecorder only after VAD discarded the first syllable. Delay
+    its input by 350 ms while VAD still reads the live microphone. The bounded
+    buffer preserves onset without recording idle silence; the 850 ms early
+    STT pause also leaves time for the delayed tail. Reuse and release its
+    audio graph together with the call context.
 """
 from pathlib import Path
 import re
 import sys
+import os
 
-CHUNKS = Path("/app/build/_app/immutable/chunks")
+CHUNKS = Path(os.environ.get("OWUI_CHUNKS", "/app/build/_app/immutable/chunks"))
 
 # minified: Ue.set(ue,new Audio(Ct))  (TTS engine and browser-kokoro branches)
 LEAK = re.compile(r"\.set\((\w+),new Audio\((\w+)\)\)")
@@ -85,7 +96,7 @@ AC_NEW = re.compile(
     r"const (\w+)=new AudioContext,(\w+)=\1\.createMediaStreamSource\((\w+)\),(\w+)=\1\.createAnalyser\(\);"
 )
 # minified: catch(ue){}r(S)&&(r(S).getAudioTracks().forEach(function(ue){ue.stop()}),c(S,null))
-AC_STOP = re.compile(r"(catch\(\w+\)\{\})(\w+\(\w+\)&&\(\w+\(\w+\)\.getAudioTracks\(\)\.forEach)")
+AC_STOP = re.compile(r"(catch\(\w+\)\{\})((?:\w+\(\w+\)|\w+)&&\((?:\w+\(\w+\)|\w+)\.getAudioTracks\(\)\.forEach)")
 AC_MARKER = "/*localllm-call-ac*/"
 # minified (dictation level meter): Re=e=>{const t=new AudioContext,r=t.createMediaStreamSource(e),...
 #   (()=>{const y=()=>{if(!(!m()||o(l))){...window.requestAnimationFrame(y)}};window.requestAnimationFrame(y)})()
@@ -96,7 +107,7 @@ DICT_MARKER = "/*localllm-dict-ac*/"
 EMPTY = re.compile(r"if\(!(\w+)\|\|\1\.size<100\)return;")
 EMPTY_MARKER = "/*localllm-call-empty*/"
 # minified: Bt=(w,C=!1)=>{var fe,Ae,at;if(!W())return;...Fo(w==null?void 0:w.output)...De.dispatchEvent(new CustomEvent("chat"
-FILLER_FN = re.compile(r"=\((\w+),\w+=!1\)=>\{var [\w,]+;if\(!\w+\(\)\)return;")
+FILLER_FN = re.compile(r"=\((\w+),\w+=!1\)=>\{var [\w,]+;if\((?:!\w+\(\)|\1\.error\|\|!\w+\(\)\|\|\w+\(\w+\)!==\"current\")\)return;")
 FILLER_MARKER = "/*localllm-call-filler*/"
 # minified: const w=r(je)?Ys(r(je),r(je).currentId):[]
 HISTORY = re.compile(r"=(\w+)\((\w+)\)\?\w+\(\1\(\2\),\1\(\2\)\.currentId\)")
@@ -112,7 +123,7 @@ CHUNKS_PUSH = re.compile(r"([\w$]+)\.ondataavailable=([\w$]+)=>\{[\w$]+&&([\w$]+
 # minified: me=Hm(ue,"recording.wav"),Ne=await _0(localStorage.token,me,(ct=(ye=(Ye=i())==null?void 0:Ye.audio)...).catch(
 UPLOAD = re.compile(r"([\w$]+)=([\w$]+)\([\w$]+,\"recording\.wav\"\),([\w$]+)=await ([\w$]+)\((localStorage\.token,\1,\([\w$]+=\([\w$]+=\([\w$]+=([\w$]+)\(\)\)[^;]{0,120}?\.language)\)\.catch\(")
 SPEC_MARKER = "/*localllm-call-spec*/"
-SPEC_AFTER_MS = 500
+SPEC_AFTER_MS = 850
 CLOSE_AC = 'window.__llAC&&(window.__llAC.close().catch(()=>{}),window.__llAC=null,window.__llSrc=null);'
 
 
@@ -162,7 +173,7 @@ def tool_filler(text: str) -> str | None:
 
 
 def early_stt(text: str) -> str | None:
-    """Start STT at 0.5 s of silence; None if this chunk is not the call overlay."""
+    """Start STT at 0.85 s of silence; None if this chunk is not the call overlay."""
     stop = SILENCE_STOP.search(text)
     if not stop:
         return None
@@ -210,10 +221,177 @@ def close_dictation_ctx(text: str) -> str | None:
     return text[:loop.start()] + "=()=>{" + stop + loop.group(1) + text[loop.end():]
 
 
-done = {"leak": 0, "hold": 0, "ac": 0, "dict": 0, "empty": 0, "filler": 0, "unmute": 0, "spec": 0}
+def abort_playback_on_interrupt(text: str) -> str | None:
+    marker = "/*localllm-call-abort*/"
+    if marker in text:
+        return text
+    # v0.12.0 already aborts the queue before pausing; keep that upstream fix.
+    modern = 'ie=async()=>{if(I())return I().stopSpeaking();__ll("interrupt:K="+r(q));c(q,!1),Oe.abort(),'
+    if modern in text:
+        if text.count(modern) != 1:
+            sys.exit("ambiguous v0.12 interrupt handler")
+        return text.replace(modern, modern + marker, 1)
+    # call_trace runs first and supplies this exact interrupt entry point.
+    anchor = 'De=async(__w)=>{__ll("interrupt:"+(__w||"?")+":K="+r(K)),'
+    at = text.find(anchor)
+    if at < 0:
+        return None
+    if text.count(anchor) != 1:
+        sys.exit("ambiguous call interrupt handler; not patched")
+    controllers = re.findall(r"\};let ([\w$]+)=new AbortController;const [\w$]+=new Map", text[at:at + 1000])
+    if len(controllers) != 1:
+        sys.exit("unexpected call playback controller; not patched")
+    controller = controllers[0]
+    return text.replace(anchor, anchor + f"{marker}{controller}&&{controller}.abort(),", 1)
+
+
+
+def recorder_preroll(text: str) -> str | None:
+    """Keep the microphone onset while VAD starts the encoder, without idle recordings."""
+    marker = "/*localllm-call-preroll*/"
+    if marker in text:
+        return text
+    if AC_MARKER not in text:
+        return None
+    pattern = r"new MediaRecorder\((\w+\(\w+\)|\w+)\)"
+    if len(re.findall(pattern, text)) != 1 or text.count(CLOSE_AC) != 1:
+        sys.exit("unexpected call recorder or cleanup; preroll not patched")
+    helper = (
+        marker + "const __llRecordClear=()=>{"
+        "window.__llRecordSrc?.disconnect();window.__llRecordDelay?.disconnect();"
+        "window.__llRecordDest?.stream.getTracks().forEach(t=>t.stop());"
+        "window.__llRecordSrc=null;window.__llRecordDelay=null;"
+        "window.__llRecordDest=null;window.__llRecordInput=null;window.__llRecordCtx=null;};"
+        "const __llRecordStream=stream=>{"
+        "const ctx=window.__llAC&&window.__llAC.state!==\"closed\"?window.__llAC:(window.__llAC=new AudioContext);"
+        "if(window.__llRecordInput!==stream||window.__llRecordCtx!==ctx){"
+        "__llRecordClear();window.__llRecordInput=stream;window.__llRecordCtx=ctx;"
+        "window.__llRecordSrc=ctx.createMediaStreamSource(stream);"
+        "window.__llRecordDelay=ctx.createDelay(1);window.__llRecordDelay.delayTime.value=.35;"
+        "window.__llRecordDest=ctx.createMediaStreamDestination();"
+        "window.__llRecordSrc.connect(window.__llRecordDelay);"
+        "window.__llRecordDelay.connect(window.__llRecordDest);"
+        "}ctx.state===\"suspended\"&&ctx.resume();return window.__llRecordDest.stream;};"
+    )
+    text = re.sub(pattern, r"new MediaRecorder(__llRecordStream(\1))", text)
+    return helper + text.replace(CLOSE_AC, "__llRecordClear();" + CLOSE_AC, 1)
+
+
+# Component-local state: a new recorder may start while the previous STT awaits.
+# Keep the delay graph across turns, but never share a speculative result across
+# recorders. The upstream transcription API cannot cancel an in-flight request;
+# allow at most one speculative request per utterance and discard stale results.
+MODERN_VOICE_HELPER = r'''(()=>{
+ let graph=null,epoch=0;const recordings=new Map();
+ const dropListener=s=>{if(s.listener){s.rec.removeEventListener("dataavailable",s.listener);s.listener=null}};
+ const clearGraph=()=>{if(!graph)return;const g=graph;graph=null;
+  g.source.disconnect();g.delay.disconnect();g.dest.stream.getTracks().forEach(t=>t.stop());g.ctx.close().catch(()=>{})};
+ return {
+  stream(input){
+   if(!graph||graph.input!==input||graph.ctx.state==="closed"){
+    clearGraph();const ctx=new AudioContext(),source=ctx.createMediaStreamSource(input),delay=ctx.createDelay(1),dest=ctx.createMediaStreamDestination();
+    delay.delayTime.value=.35;source.connect(delay);delay.connect(dest);graph={ctx,source,delay,dest,input};
+   }
+   if(graph.ctx.state==="suspended")graph.ctx.resume().catch(()=>{});
+   return graph.dest.stream;
+  },
+  begin(rec){const old=recordings.get(rec);if(old)dropListener(old);
+   recordings.set(rec,{rec,parts:[],revision:0,attempted:false,spec:null,listener:null,epoch})},
+  data(rec,blob){const s=recordings.get(rec);if(s&&blob.size)s.parts.push(blob)},
+  sound(rec){const s=recordings.get(rec);if(s){s.revision++;s.spec=null;dropListener(s)}},
+  early(rec,transcribe){
+   const s=recordings.get(rec);if(!s||s.attempted||rec.state!=="recording"||typeof rec.requestData!=="function")return;
+   s.attempted=true;const revision=s.revision;
+   s.listener=()=>{dropListener(s);if(recordings.get(rec)!==s||s.revision!==revision||s.epoch!==epoch)return;
+    const blob=new Blob(s.parts.slice(),{type:rec.mimeType||"audio/wav"});if(blob.size<1000)return;
+    s.spec={revision,promise:Promise.resolve().then(()=>s.revision===revision&&s.epoch===epoch?transcribe(blob):null).catch(()=>null)};
+   };
+   rec.addEventListener("dataavailable",s.listener,{once:true});
+   try{rec.requestData()}catch(_){dropListener(s)}
+  },
+  finish(rec){const s=recordings.get(rec);if(!s)return {epoch,spec:null};
+   dropListener(s);recordings.delete(rec);return {epoch:s.epoch,revision:s.revision,spec:s.spec}},
+  async result(turn,fallback){
+   if(!turn||turn.epoch!==epoch)return null;
+   let result=null;
+   if(turn.spec&&turn.spec.revision===turn.revision)result=await turn.spec.promise;
+   if(turn.epoch!==epoch)return null;
+   if(!result||typeof result.text!=="string"||!result.text.trim())result=await fallback();
+   return turn.epoch===epoch?result:null;
+  },
+  close(){epoch++;for(const s of recordings.values())dropListener(s);recordings.clear();clearGraph()}
+ };
+})()'''
+
+
+def modern_voice(text: str) -> str:
+    """Known v0.12.3 standard-call sites; retain upstream realtime-call code."""
+    marker = "/*localllm-call-modern-voice-v2*/"
+    if marker in text:
+        return text
+    # Parent visibility changes before asynchronous Svelte cleanup completes.
+    # Recheck it after STT, even if cleanup has not closed the helper yet.
+    submit = 'if(vt&&(vt.text,vt.text!==""))'
+    guarded_submit = 'if(i()&&!r(re)&&vt&&(vt.text,vt.text!==""))'
+    previous = "/*localllm-call-modern-voice-v1*/"
+    if previous in text:
+        if text.count(submit) != 1:
+            sys.exit("unexpected v0.12.3 pending-STT submission site")
+        return text.replace(previous, marker, 1).replace(submit, guarded_submit, 1)
+    edits = (
+        ('et=-55,Xe=async tt=>', 'et=-55,__llVoice=' + MODERN_VOICE_HELPER + ',Xe=async(tt,__llTurn)=>'),
+        ('vt=await ky(localStorage.token,ft,', 'vt=await __llVoice.result(__llTurn,()=>ky(localStorage.token,ft,'),
+        ('.language).catch(Br=>(_t.error(`${Br}`),null));if(vt&&(vt.text,',
+         '.language)).catch(Br=>(_t.error(`${Br}`),null));if(vt&&(vt.text,'),
+        (submit, guarded_submit),
+        ('const ft=ee.slice(0);if(ee=[],H=!1,tt&&Ae(),j)',
+         'const ft=ee.slice(0),__llTurn=__llVoice.finish(H),__llDone=j;if(ee=[],H=!1,j=!1,tt&&Ae(),__llDone)'),
+        ('await Xe(vt),j=!1,l(X,!1)', 'await Xe(vt,__llTurn),l(X,!1)'),
+        ('H=new MediaRecorder(R),H.onstart=()=>{ee=[]}',
+         'H=new MediaRecorder(__llVoice.stream(R)),H.onstart=tt=>{ee=[];__llVoice.begin(tt.currentTarget)}'),
+        ('H.ondataavailable=tt=>{r(M)&&ee.push(tt.data)}',
+         'H.ondataavailable=tt=>{__llVoice.data(tt.currentTarget,tt.data);r(M)&&ee.push(tt.data)}'),
+        ('Ue=async()=>{try{H&&H.stop()}', 'Ue=async()=>{__llVoice.close();try{H&&H.stop()}'),
+        ('Br=Date.now()),r(M)&&Date.now()-Br>1200',
+         'Br=Date.now(),__llVoice.sound(H)),r(M)&&Date.now()-Br>850&&'
+         '__llVoice.early(H,blob=>ky(localStorage.token,m0(blob,"recording.wav"),'
+         'n()?.audio?.stt?.language)),r(M)&&Date.now()-Br>1200'),
+    )
+    for old, new in edits:
+        if text.count(old) != 1:
+            sys.exit(f"unexpected v0.12.3 recording site ({text.count(old)} matches): {old[:80]}")
+        text = text.replace(old, new, 1)
+    return marker + text
+
+
+upstream_v0122 = False
+modern_v0123 = False
+done = {"leak": 0, "hold": 0, "ac": 0, "dict": 0, "empty": 0, "filler": 0, "unmute": 0, "spec": 0, "abort": 0, "preroll": 0}
 for path in CHUNKS.glob("*.js"):
     text = path.read_text()
+    # Only these components own the patch sites. Avoid quadratic regex scans
+    # of unrelated vendor chunks with long minified identifiers/data strings.
+    if not any(anchor in text for anchor in ("audioElement", "ttsSentContentPartCount", "getDisplayMedia")):
+        continue
+    # v0.12.2/3 own and close its recording AudioContext and unmutes before
+    # playback. Retain upstream lifecycle code; the v0.12.3 recording
+    # optimizations use their own guarded sites below.
+    upstream_sites = {
+        "7VCM_nZw.js": (  # v0.12.2
+            "Ue=()=>{G==null||G.close(),G=void 0}",
+            "ft.muted=!1,ft.playbackRate=", "Lt.abort(),qe&&m&&L()()",
+        ),
+        "BjRGu3Y4.js": (  # v0.12.3; same lifecycle with renamed minified locals
+            "Oe=()=>{K==null||K.close(),K=void 0}",
+            "vt.muted=!1,vt.playbackRate=", "mt.abort(),tt&&y&&D()()",
+        ),
+    }
+    if path.name in upstream_sites and all(site in text for site in upstream_sites[path.name]):
+        upstream_v0122 = True
     new = text
+    if path.name == "BjRGu3Y4.js" and upstream_v0122:
+        new = modern_voice(new)
+        modern_v0123 = True
     if LEAK_MARKER in new:
         done["leak"] += 1
     elif "audioElement" in new and "new Audio(" in new and LEAK.search(new):
@@ -269,12 +447,21 @@ for path in CHUNKS.glob("*.js"):
             new = patched_filler
             done["filler"] += 1
     if SPEC_MARKER in new:
+        new = re.sub(r"(/\*localllm-call-spec\*/\([\w$]+&&Date.now\(\)-[\w$]+>)500(?=&&)", lambda m: m.group(1) + str(SPEC_AFTER_MS), new)
         done["spec"] += 1
     else:
         patched_spec = early_stt(new)
         if patched_spec is not None:
             new = patched_spec
             done["spec"] += 1
+    patched_abort = abort_playback_on_interrupt(new)
+    if patched_abort is not None:
+        new = patched_abort
+        done["abort"] += 1
+    patched_preroll = recorder_preroll(new)
+    if patched_preroll is not None:
+        new = patched_preroll
+        done["preroll"] += 1
     if EMPTY_MARKER in new:
         done["empty"] += 1
     elif "recording.wav" in new and EMPTY.search(new):
@@ -286,6 +473,12 @@ for path in CHUNKS.glob("*.js"):
         path.write_text(new)
         print(f"{path.name}: patched")
 
-if done != {"leak": 1, "hold": 1, "ac": 1, "dict": 1, "empty": 1, "filler": 1, "unmute": 1, "spec": 1}:
+expected = {"leak": 1, "hold": 1, "ac": 1, "dict": 1, "empty": 1, "filler": 1, "unmute": 1, "spec": 1, "abort": 1, "preroll": 1}
+if upstream_v0122:
+    expected.update(ac=0, dict=0, unmute=0, spec=0, abort=0, preroll=0)
+    print("upstream audio lifecycle retained; " + (
+        "v0.12.3 per-recording early-STT and persistent pre-roll installed"
+        if modern_v0123 else "v0.12.2 legacy early-STT/pre-roll hooks not installed"))
+if done != expected:
     sys.exit(f"expected one of each call-audio / dictation patch site, found {done}")
 print("call audio patches in place")

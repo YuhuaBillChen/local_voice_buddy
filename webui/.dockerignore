@@ -1,0 +1,4 @@
+**
+!Dockerfile
+!.dockerignore
+!patches/patch_openwebui_*.py
