@@ -7,6 +7,7 @@ nothing leaves the machine: no account, no cloud, no subscription.
 - **Brain**: Qwen3.8-27B, a 27-billion-parameter open model, on the Radeon iGPU
 - **Ears and mouth**: speech recognition (Whisper large-v3-turbo) and a natural voice
   (CosyVoice3) on the Ryzen AI NPU, which otherwise sits idle; it can also speak in a voice you record
+- **Visual answers**: in typed chats, cards, tables, charts and small forms drawn by the model
 - Chinese and English, mixed freely
 
 Website, with recordings of it in use: <https://yuhuabillchen.github.io/local_voice_buddy/>
@@ -66,6 +67,13 @@ sudo tailscale serve --bg 3000
 
 Then open `https://<pc-name>.<your-tailnet>.ts.net` on the phone (with Tailscale on). In Chrome or
 Edge, "Install app" puts it on the home screen like a normal app.
+
+## Interactive answers
+
+In a typed chat Buddy can answer with cards, tables, charts, editable forms and SVG drawings, drawn
+by the 27B with the MIT-licensed [Open Intelligent UI](https://github.com/thesysdev/open-intelligent-ui)
+components, all on the PC. Ask for a comparison, a diagram or a small calculator. Voice calls keep
+answering out loud. Details and settings: [docs/openui.md](docs/openui.md).
 
 ## Your own voice
 
@@ -130,4 +138,4 @@ Memory use and response times, measured on a 32 GB Ryzen 7 8845HS: [docs/measure
 This repository: Apache-2.0. It downloads and runs, without modifying them except as noted:
 Open WebUI (its own license: BSD-3-Clause plus keeping the Open WebUI branding, which stays as is;
 patched at build time by `webui/patches/`), llama.cpp (MIT), Qwen3.8-27B (Apache-2.0, GGUF by Unsloth), npu-cosyvoice
-(Apache-2.0) with CosyVoice3 (Apache-2.0) and whisper-xdna (MIT). See NOTICE.
+(Apache-2.0) with CosyVoice3 (Apache-2.0) and whisper-xdna (MIT), plus Open Intelligent UI (MIT). See NOTICE.

@@ -57,6 +57,31 @@
    "sha256": "9de7bf255b76f9e4148439990523dfdf6574a5d30698d6087090b888917c6f1f",
    "page_errors": [],
    "speech_requests": 2
+  },
+  "visual": {
+   "duration_s": 46.2,
+   "bytes": 526381,
+   "sha256": "f72b78d9254f9c5392644c25ed1f27bc0cb28b90bb0924412eec876dcb916760",
+   "recorded": "2026-10-21",
+   "version": "0.1.2",
+   "page_errors": [
+    "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag."
+   ],
+   "note": "the page error comes from Open WebUI's own sandboxed frame; the drawn answer has no errors",
+   "scene": "pie chart of five monthly expenses"
+  },
+  "visual-en": {
+   "duration_s": 37.98,
+   "bytes": 356713,
+   "sha256": "ad8ac5e92c45255fdf8d417c5ce4ccf8e06fa8f32ce138976aefac5f96d7c5f1",
+   "recorded": "2026-10-21",
+   "version": "0.1.2",
+   "page_errors": [
+    "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+    "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag."
+   ],
+   "note": "the page error comes from Open WebUI's own sandboxed frame; the drawn answer has no errors",
+   "scene": "pie chart of five monthly expenses"
   }
  }
 }

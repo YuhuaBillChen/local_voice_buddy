@@ -97,7 +97,7 @@ services:
 
   webui:
     build: webui
-    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.1
+    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.2
     ports:
       - "${WEBUI_BIND:-0.0.0.0}:${WEBUI_PORT:-3000}:8080"
     environment:
@@ -129,7 +129,8 @@ services:
       ENABLE_RETRIEVAL_QUERY_GENERATION: "False"
       ENABLE_SEARCH_QUERY_GENERATION: "False"
       # tool descriptions are read before every new chat; each one costs time (webui/patches/patch_openwebui_builtin_tools.py)
-      BUILTIN_TOOLS: "${BUILTIN_TOOLS:-time}"
+      BUILTIN_TOOLS: "${BUILTIN_TOOLS:-time,openui}"
+      OPENUI_NETWORK: "${OPENUI_NETWORK:-false}"
       ENABLE_VERSION_UPDATE_CHECK: "False"  # updates come with this repository (see README)
       SCARF_NO_ANALYTICS: "true"
       DO_NOT_TRACK: "true"

@@ -2,3 +2,7 @@
 !Dockerfile
 !.dockerignore
 !patches/patch_openwebui_*.py
+!openui/entry.tsx
+!openui/build.mjs
+!openui/buddy_openui.py
+!openui/host.js

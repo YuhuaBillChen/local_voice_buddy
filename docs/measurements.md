@@ -1,7 +1,7 @@
 # Measurements
 
 Ryzen 7 8845HS (Radeon 780M, XDNA1 NPU), 32 GB RAM of which Linux sees 27.7 GB (the BIOS reserves 3 GB
-for the GPU), Ubuntu 26.04, kernel 7.0, default settings. Version 0.1.1 (Open WebUI v0.12.3), 2026-10-17.
+for the GPU), Ubuntu 26.04, kernel 7.0, default settings. Version 0.1.2 (Open WebUI v0.12.3), 2026-10-20.
 
 ## Installing
 
@@ -41,6 +41,15 @@ Where the time goes in a later turn: speech recognition about 3.3 s (it starts 0
 so part of it overlaps the 1.2 s wait), the model's first sentence 2-3 s, synthesizing that sentence
 4-5 s while the model keeps writing. The very first message is slower because the model reads Open
 WebUI's ~700-token setup first (~10 s at ~70 tokens/s); after that it is cached, also for new chats.
+
+## Visual answers (0.1.2)
+
+From pressing Enter to the finished drawing, including typing the question: a pie chart from five
+monthly expenses took 38 s (English) and 45-64 s (Chinese, four runs); a comparison table with a
+recommendation card took 87-98 s. The tool descriptions make a new typed chat's opening 921 tokens
+instead of 698. Voice calls do not carry them, so the first message of a voice call right after typed
+chats has to read its own opening once (20.7 s to first sound in that run instead of 8-9 s); later
+turns were unaffected (11.3 s).
 
 ## Voice quality settings
 

@@ -15,3 +15,9 @@ models are downloaded separately under their own terms.
   (https://huggingface.co/unsloth/Qwen3.8-27B-GGUF), downloaded by install.sh.
 - npu-cosyvoice (https://github.com/YuhuaBillChen/npu-cosyvoice), Apache-2.0, which in turn uses
   CosyVoice3 (Apache-2.0) and whisper-xdna (MIT); see its NOTICE.
+
+- Open Intelligent UI (https://github.com/thesysdev/open-intelligent-ui), MIT, copyright 2026
+  Thesys Inc.; component library pinned to 03213439358bf3408ad61a46ec9e3230c5572e48.
+  Built at image creation with its pinned npm dependencies. MIT license, dependency notices,
+  and source provenance are served under /static/buddy-openui/. Buddy's host adapter is original
+  code; it does not include the separate thesysdev/openwebui-plugin.
