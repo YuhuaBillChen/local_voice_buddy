@@ -1,7 +1,7 @@
 # Local Voice Buddy: Open WebUI + Qwen3.8-27B on the Radeon iGPU + speech in and out on the Ryzen AI NPU.
 # Run ./install.sh rather than this file directly; it checks the machine, writes .env and downloads the model.
 #
-#   webui   http://<this machine>:3000      Open WebUI with voice-call fixes (webui/)
+#   webui   http://localhost:3000           Open WebUI with voice-call fixes (webui/)
 #   llm     llama.cpp (Vulkan) serving Qwen3.8-27B, only reachable by webui
 #   voice   CosyVoice3 TTS on the NPU + /v1/audio/transcriptions, from npu-cosyvoice
 #   whisper whisper-xdna large-v3-turbo STT on the NPU, from npu-cosyvoice
@@ -19,14 +19,14 @@ x-npu: &npu
 # The speech services are built from https://github.com/YuhuaBillChen/npu-cosyvoice at a fixed tag, unless
 # the prebuilt image can be pulled. NPU_COSYVOICE_SRC can point at a local checkout instead.
 x-npu-cosyvoice: &npu-cosyvoice
-  context: "${NPU_COSYVOICE_SRC:-https://github.com/YuhuaBillChen/npu-cosyvoice.git#v0.1.1}"
+  context: "${NPU_COSYVOICE_SRC:-https://github.com/YuhuaBillChen/npu-cosyvoice.git#v0.1.2}"
   dockerfile: docker/Dockerfile
 
 services:
   setup:
     profiles: [setup]
     build: {<<: *npu-cosyvoice, target: voice}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.1
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.2
     command: bash voice/setup.sh
     environment:
       PREBUILT_REPO: "${PREBUILT_REPO-billchen42/npu-cosyvoice}"
@@ -55,7 +55,7 @@ services:
   voice:
     <<: *npu
     build: {<<: *npu-cosyvoice, target: voice}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.1
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-voice:0.1.2
     environment:
       STT_URL: http://whisper:8090
       DEFAULT_SPEED: "${SPEECH_SPEED:-1.1}"
@@ -74,7 +74,7 @@ services:
   whisper:
     <<: *npu
     build: {<<: *npu-cosyvoice, target: whisper}
-    image: ghcr.io/yuhuabillchen/npu-cosyvoice-whisper:0.1.1
+    image: ghcr.io/yuhuabillchen/npu-cosyvoice-whisper:0.1.2
     environment:
       NPU_STT_MAX_CTX: "5"          # XDNA1 has 6 contexts; the TTS keeps one
       NPU_STT_MODEL: large-v3-turbo
@@ -97,9 +97,9 @@ services:
 
   webui:
     build: webui
-    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.2
+    image: ghcr.io/yuhuabillchen/local-voice-buddy-webui:0.1.3
     ports:
-      - "${WEBUI_BIND:-0.0.0.0}:${WEBUI_PORT:-3000}:8080"
+      - "${WEBUI_BIND:-127.0.0.1}:${WEBUI_PORT:-3000}:8080"
     environment:
       WEBUI_NAME: Local Voice Buddy
       WEBUI_SECRET_KEY_FILE: /app/backend/data/.webui_secret_key  # in the volume, so updates keep you logged in

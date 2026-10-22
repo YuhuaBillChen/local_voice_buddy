@@ -19,3 +19,7 @@ COPY patches /tmp/patches
 RUN set -e; for p in tts_split tts_playback call_latency call_audio voice_prompt builtin_tools openui frontend_release; do \
         python /tmp/patches/patch_openwebui_$p.py; \
     done; rm -rf /tmp/patches
+# the base image's labels name Open WebUI; these name this repository (GHCR links the package to it)
+LABEL org.opencontainers.image.source=https://github.com/YuhuaBillChen/local_voice_buddy \
+      org.opencontainers.image.description="Open WebUI v0.12.3 with Local Voice Buddy's voice-call fixes and visual answers" \
+      org.opencontainers.image.licenses="Apache-2.0 AND BSD-3-Clause"

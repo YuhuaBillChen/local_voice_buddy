@@ -109,8 +109,8 @@ echo "Waiting for chat, synthesis, recognition and the web interface (first-star
 for _ in $(seq 480); do
   if services_ready; then
     web_port=$(published_webui_port) || fail "cannot determine the web interface port; see docker compose ps"
-    web_host=${WEBUI_BIND:-0.0.0.0}
-    [[ "$web_host" != 0.0.0.0 ]] || web_host=localhost
+    web_host=${WEBUI_BIND:-127.0.0.1}
+    [[ "$web_host" != 0.0.0.0 && "$web_host" != 127.0.0.1 ]] || web_host=localhost
     say "Ready"
     echo "Open http://${web_host}:${web_port} on this machine. The first account you create is the admin."
     echo "For another computer or phone, see 'Use it from your phone'"

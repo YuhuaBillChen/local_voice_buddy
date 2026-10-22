@@ -54,11 +54,10 @@ Interface > Allow Voice Interruption in Call (off by default).
 
 ## Use it from your phone
 
-Open `http://<the PC's address>:3000` on any device at home. Typing works right away. Accounts
-other people create wait for your approval under Admin Settings > Users, unless you set the default
-role there to "user". Browsers only allow the microphone on secure (https) pages, though, so for
-talking from another device the simplest route is [Tailscale](https://tailscale.com) (free for personal use), which also works away
-from home:
+Out of the box only the PC itself can open Buddy, so nobody else on your network can create the
+first account (which becomes the admin) before you do. Browsers also only allow the microphone on
+secure (https) pages, so for talking from another device the simplest route is
+[Tailscale](https://tailscale.com) (free for personal use), which also works away from home:
 
 ```sh
 # on the PC, after installing Tailscale and turning on HTTPS in its admin console
@@ -67,6 +66,11 @@ sudo tailscale serve --bg 3000
 
 Then open `https://<pc-name>.<your-tailnet>.ts.net` on the phone (with Tailscale on). In Chrome or
 Edge, "Install app" puts it on the home screen like a normal app.
+
+To type from any device at home without Tailscale, create your account first, then set
+`WEBUI_BIND=0.0.0.0` in `.env`, run `docker compose up -d` and open `http://<the PC's address>:3000`.
+This is plain http, so anyone on your network can read the traffic. Accounts other people create
+wait for your approval under Admin Settings > Users, unless you set the default role there to "user".
 
 ## Interactive answers
 
@@ -101,6 +105,7 @@ Edit `.env` and run `docker compose up -d`:
 | `STT_BEAM_SIZE` | 1 | speech recognition search width, 1-8; higher is slower and not reliably more accurate |
 | `VOICE` | default | voice Open WebUI starts with; read on its first start only, afterwards Admin Settings > Audio |
 | `WEBUI_PORT` | 3000 | |
+| `WEBUI_BIND` | 127.0.0.1 | `0.0.0.0` opens the web interface to your network (see "Use it from your phone") |
 
 ## Everyday commands
 

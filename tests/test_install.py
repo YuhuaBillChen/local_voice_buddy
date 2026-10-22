@@ -35,10 +35,24 @@ class InstallerTests(unittest.TestCase):
             self.assertNotEqual(self.shell(f'model_verified "{link}" 3 {digest}').returncode,0)
 
     def test_failed_pull_builds_even_if_old_image_exists(self):
-        r=self.shell('docker() { echo "$*"; if [[ "$*" == *"pull setup"* ]]; then return 1; fi; }; prepare_images')
+        r=self.shell('docker() { echo "$*"; if [[ "$*" == "pull "*-voice@* ]]; then return 1; fi; }; prepare_images')
         self.assertEqual(r.returncode,0,r.stderr)
         self.assertIn('build setup',r.stdout)
+        self.assertNotIn('build whisper',r.stdout)
         self.assertIn('build webui',r.stdout)
+
+    def test_speech_images_are_pulled_by_digest_under_the_compose_tag(self):
+        import re
+        r=self.shell('docker() { echo "$*"; }; prepare_images')
+        self.assertEqual(r.returncode,0,r.stderr)
+        compose=(ROOT/'compose.yml').read_text()
+        for service,image in (('setup','npu-cosyvoice-voice'),('whisper','npu-cosyvoice-whisper')):
+            tag=re.search(r'image: (ghcr\.io/\S+/'+image+r':[\w.]+)',compose).group(1)
+            pulled=re.search(r'^pull (\S+/'+image+r'@sha256:\S+)$',r.stdout,re.M)
+            self.assertTrue(pulled,r.stdout)
+            self.assertIn(f'tag {pulled.group(1)} {tag}',r.stdout)
+            self.assertRegex(pulled.group(1),r'@sha256:[0-9a-f]{64}$')
+        self.assertIn('#v'+re.search(r'npu-cosyvoice-voice:([\w.]+)',compose).group(1)+'}',compose)
 
     def test_ready_uses_actual_published_port(self):
         r=self.shell('docker() { echo "127.0.0.1:32770"; }; published_webui_port')
